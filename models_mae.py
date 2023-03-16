@@ -48,7 +48,7 @@ class MaskedAutoencoderViT(nn.Module):
 
         self.mask_token = nn.Parameter(torch.zeros(1, 1, decoder_embed_dim))
 
-        self.decoder_pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, decoder_embed_dim), requires_grad=False)  # fixed sin-cos embedding
+        self.decoder_pos_embed = nn.Parameter(torch.zeros(1, num_patches*2 + 1, decoder_embed_dim), requires_grad=True)  # Learnable embedding
 
         self.decoder_blocks = nn.ModuleList([
             Block(decoder_embed_dim, decoder_num_heads, mlp_ratio, qkv_bias=True, qk_scale=None, norm_layer=norm_layer)
@@ -68,8 +68,8 @@ class MaskedAutoencoderViT(nn.Module):
         pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1], int(self.patch_embed.num_patches**.5), cls_token=True)
         self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
 
-        decoder_pos_embed = get_2d_sincos_pos_embed(self.decoder_pos_embed.shape[-1], int(self.patch_embed.num_patches**.5), cls_token=True)
-        self.decoder_pos_embed.data.copy_(torch.from_numpy(decoder_pos_embed).float().unsqueeze(0))
+        # decoder_pos_embed = get_2d_sincos_pos_embed(self.decoder_pos_embed.shape[-1], int(self.patch_embed.num_patches**.5), cls_token=True)
+        # self.decoder_pos_embed.data.copy_(torch.from_numpy(decoder_pos_embed).float().unsqueeze(0))
 
         # initialize patch_embed like nn.Linear (instead of nn.Conv2d)
         w = self.patch_embed.proj.weight.data
@@ -97,6 +97,7 @@ class MaskedAutoencoderViT(nn.Module):
         imgs: (N, 3, H, W)
         x: (N, L, patch_size**2 *3)
         """
+        ## Input the tuple
         p = self.patch_embed.patch_size[0]
         assert imgs.shape[2] == imgs.shape[3] and imgs.shape[2] % p == 0
 
@@ -149,13 +150,24 @@ class MaskedAutoencoderViT(nn.Module):
 
     def forward_encoder(self, x, mask_ratio):
         # embed patches
-        x = self.patch_embed(x)
+        print("Patchify each image one by one \n")
+        print("1:{} 2: {} \n".format(x[:,:3,:,:].shape, x[:,3:,:,:].shape))
+
+        x1 = self.patch_embed(x[:,:3,:,:])
+        x2 = self.patch_embed(x[:,3:,:,:])
 
         # add pos embed w/o cls token
-        x = x + self.pos_embed[:, 1:, :]
+        x1 = x1 + self.pos_embed[:, 1:, :]
+        x2 = x2 + self.pos_embed[:, 1:, :]
 
         # masking: length -> length * mask_ratio
-        x, mask, ids_restore = self.random_masking(x, mask_ratio)
+        x1, mask1, ids_restore1 = self.random_masking(x1, mask_ratio)
+        x2, mask2, ids_restore2 = self.random_masking(x2, mask_ratio)
+
+        #Now maybe the concat part or provide bothe to the rnadom masker
+        x = torch.cat((x1,x2),dim=1)
+        mask = torch.cat((mask1,mask2),dim=1)
+        ids_restore = torch.cat((ids_restore1,ids_restore2),dim=1)
 
         # append cls token
         cls_token = self.cls_token + self.pos_embed[:, :1, :]
@@ -179,7 +191,9 @@ class MaskedAutoencoderViT(nn.Module):
         x_ = torch.gather(x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle
         x = torch.cat([x[:, :1, :], x_], dim=1)  # append cls token
 
-        # add pos embed
+        print("shape of output: {} \n".format(x.shape))
+        # add pos embed (I think, we need to split up here, but the decoder pose emebdding is learnable or not?? )
+        ### if it is learnable then, we need to create two decode_pos_embed vector one for each image
         x = x + self.decoder_pos_embed
 
         # apply Transformer blocks
@@ -201,7 +215,10 @@ class MaskedAutoencoderViT(nn.Module):
         pred: [N, L, p*p*3]
         mask: [N, L], 0 is keep, 1 is remove, 
         """
-        target = self.patchify(imgs)
+        target1 = self.patchify(imgs[:,:3,:,:])
+        target2 = self.patchify(imgs[:,3:,:,:])
+        target = torch.cat((target1,target2),dim=1)
+
         if self.norm_pix_loss:
             mean = target.mean(dim=-1, keepdim=True)
             var = target.var(dim=-1, keepdim=True)

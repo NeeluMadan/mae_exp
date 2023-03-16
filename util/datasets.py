@@ -11,6 +11,7 @@
 import os
 import PIL
 
+import torch
 from torchvision import datasets, transforms
 
 from timm.data import create_transform
@@ -63,3 +64,17 @@ def build_transform(is_train, args):
     t.append(transforms.ToTensor())
     t.append(transforms.Normalize(mean, std))
     return transforms.Compose(t)
+
+def collate_fn(batch):
+    # Assumes each batch element is a tuple of (data, label)
+    data = []
+    labels = []
+    for i in range(0, len(batch), 2):
+        image1, label1 = batch[i]
+        image2, label2 = batch[i + 1]
+        # concatenate images along the channel dimension (assumes same shape)
+        concatenated_images = torch.cat((image1.unsqueeze(0), image2.unsqueeze(0)), dim=1)
+        data.append(concatenated_images)
+        labels.append(label1)  # or label2, since they should be the same
+    images = torch.squeeze(torch.stack(data))
+    return images, torch.tensor(labels)

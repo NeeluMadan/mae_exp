@@ -29,22 +29,23 @@ import timm.optim.optim_factory as optim_factory
 
 import util.misc as misc
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
+from util.datasets import collate_fn as custom_collate_fn
 
 import models_mae
 
-from engine_pretrain import train_one_epoch
+from engine_pretrain_local import train_one_epoch
 
 
 def get_args_parser():
     parser = argparse.ArgumentParser('MAE pre-training', add_help=False)
-    parser.add_argument('--batch_size', default=64, type=int,
+    parser.add_argument('--batch_size', default=10, type=int,
                         help='Batch size per GPU (effective batch size is batch_size * accum_iter * # gpus')
     parser.add_argument('--epochs', default=400, type=int)
     parser.add_argument('--accum_iter', default=1, type=int,
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
     # Model parameters
-    parser.add_argument('--model', default='mae_vit_large_patch16', type=str, metavar='MODEL',
+    parser.add_argument('--model', default='mae_vit_base_patch16', type=str, metavar='MODEL',
                         help='Name of model to train')
 
     parser.add_argument('--input_size', default=224, type=int,
@@ -72,7 +73,7 @@ def get_args_parser():
                         help='epochs to warmup LR')
 
     # Dataset parameters
-    parser.add_argument('--data_path', default='/datasets01/imagenet_full_size/061417/', type=str,
+    parser.add_argument('--data_path', default='/home/nelu/MRPA_Projects/datasets/ImgNet_100/', type=str,
                         help='dataset path')
 
     parser.add_argument('--output_dir', default='./output_dir',
@@ -149,12 +150,18 @@ def main(args):
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         pin_memory=args.pin_mem,
-        drop_last=True,
+        drop_last=True, collate_fn=custom_collate_fn
     )
     
+    ###################### This was just to verify if the collate function is working fine ###################################
+    # for batch_idx, (data, target) in enumerate(data_loader_train):
+    #     # Data is now a tensor of shape (batch_size, num_channels, height, width)
+    #     print("Printing the data in new format \n")
+    #     print(data.shape)
+    ######################################################### Verified #######################################################
+
     # define the model
     model = models_mae.__dict__[args.model](norm_pix_loss=args.norm_pix_loss)
-
     model.to(device)
 
     model_without_ddp = model
