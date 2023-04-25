@@ -14,9 +14,10 @@ from functools import partial
 import torch
 import torch.nn as nn
 
-from timm.models.vision_transformer import PatchEmbed, Block
+from timm.models.vision_transformer import Block
 
 from util.pos_embed import get_2d_sincos_pos_embed
+from util.misc import PatchEmbed
 
 
 class MaskedAutoencoderViT(nn.Module):
