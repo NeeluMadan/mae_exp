@@ -43,13 +43,13 @@ def train_one_epoch(model: torch.nn.Module,
             lr_sched.adjust_learning_rate(optimizer, data_iter_step / len(data_loader) + epoch, args)
 
         samples = samples.to(device, non_blocking=True)
-        mid_x = mid_y = samples.size()[-1]/2
+        mid_x = mid_y = int(samples.size()[-1]/2)
 
         with torch.cuda.amp.autocast():    
             loss_top_left, _, _ = model(samples[:,:,0:mid_y, 0:mid_x], mask_ratio=args.mask_ratio)
             loss_top_right, _, _ = model(samples[:,:,0:mid_y, mid_x:], mask_ratio=args.mask_ratio)
             loss_bottom_left, _, _ = model(samples[:,:,mid_y:, 0:mid_x], mask_ratio=args.mask_ratio)
-            loss_bottom_right, _, _ = model(samples[:,:,mid_y:, mid_x], mask_ratio=args.mask_ratio)
+            loss_bottom_right, _, _ = model(samples[:,:,mid_y:, mid_x:], mask_ratio=args.mask_ratio)
             loss = (loss_top_left + loss_top_right + loss_bottom_left + loss_bottom_right)/4
 
         loss_value = loss.item()
