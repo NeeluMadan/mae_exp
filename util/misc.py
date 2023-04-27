@@ -24,27 +24,43 @@ from torch._six import inf
 
 from timm.models.layers import to_2tuple
 
-
 class PatchEmbed(nn.Module):
     """ Image to Patch Embedding
     """
     def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768):
         super().__init__()
         img_size = to_2tuple(img_size)
-        patch_size = to_2tuple(patch_size)
-        num_patches = (int(img_size[1]/2) // patch_size[1]) * (int(img_size[0]/2) // patch_size[0])
+        patch_size1 = to_2tuple(patch_size)
+        num_patches = (int(img_size[1]/2) // patch_size1[1]) * (int(img_size[0]/2) // patch_size1[0])
         self.img_size = img_size
-        self.patch_size = patch_size
+        self.patch_size = patch_size1
         self.num_patches = num_patches
 
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+        patch_size2 = to_2tuple(patch_size*2)
+        patch_size3 = to_2tuple(patch_size*4)
+
+        self.proj1 = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size1, stride=patch_size1)
+        self.proj2 = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size2, stride=patch_size2)
+        self.proj3 = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size3, stride=patch_size3)
 
     def forward(self, x):
         B, C, H, W = x.shape
         # FIXME look at relaxing size constraints
         assert H == int(self.img_size[0]/2) and W == int(self.img_size[1]/2), \
             f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
-        x = self.proj(x).flatten(2).transpose(1, 2)
+        # x1 = self.proj1(x)
+        x1 = self.proj1(x)
+        x2 = self.proj2(x)
+        x3 = self.proj3(x)
+
+        x2_upsample = torch.stack([torch.stack([x2] * 2, dim=3)] * 2, dim=2)
+        x3_upsample = torch.stack([torch.stack([x3] * 4, dim=3)] * 4, dim=2)
+
+        x_p2 = x2_upsample.view(B,x1.size()[1],x1.size()[2], x1.size()[3])
+        x_p4 = x3_upsample.view(B,x1.size()[1],x1.size()[2], x1.size()[3])
+
+        x = x1 + x_p2 + x_p4
+        x = x.flatten(2).transpose(1, 2)
         return x
 
 

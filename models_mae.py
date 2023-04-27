@@ -23,7 +23,7 @@ from util.misc import PatchEmbed
 class MaskedAutoencoderViT(nn.Module):
     """ Masked Autoencoder with VisionTransformer backbone
     """
-    def __init__(self, img_size=224, patch_size=16, in_chans=3,
+    def __init__(self, img_size=256, patch_size=16, in_chans=3,
                  embed_dim=1024, depth=24, num_heads=16,
                  decoder_embed_dim=512, decoder_depth=8, decoder_num_heads=16,
                  mlp_ratio=4., norm_layer=nn.LayerNorm, norm_pix_loss=False):
@@ -73,8 +73,12 @@ class MaskedAutoencoderViT(nn.Module):
         self.decoder_pos_embed.data.copy_(torch.from_numpy(decoder_pos_embed).float().unsqueeze(0))
 
         # initialize patch_embed like nn.Linear (instead of nn.Conv2d)
-        w = self.patch_embed.proj.weight.data
-        torch.nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
+        w1 = self.patch_embed.proj1.weight.data
+        torch.nn.init.xavier_uniform_(w1.view([w1.shape[0], -1]))
+        w2 = self.patch_embed.proj2.weight.data
+        torch.nn.init.xavier_uniform_(w2.view([w2.shape[0], -1]))
+        w3 = self.patch_embed.proj3.weight.data
+        torch.nn.init.xavier_uniform_(w3.view([w3.shape[0], -1]))
 
         # timm's trunc_normal_(std=.02) is effectively normal_(std=0.02) as cutoff is too big (2.)
         torch.nn.init.normal_(self.cls_token, std=.02)
